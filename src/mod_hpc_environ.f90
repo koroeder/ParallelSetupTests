@@ -2,6 +2,7 @@ module HPCenvironment
    implicit none
    character(len=100) :: hostname
    character(len=200) :: pathnode = '/scratch/users/$USER/' !change if needed
+   character(len=200) :: submitdir
    integer :: ntasks
    integer :: slurmversion
    logical :: runlocal = .false.
@@ -44,4 +45,9 @@ module HPCenvironment
          close(slurmunit)
          call execute_command_line("rm slurmversion")
       end subroutine get_slurmversion
+
+      subroutine get_subdir()
+         implicit none
+         call get_environment_variable("SLURM_SUBMIT_DIR/", submitdir)
+      end subroutine get_subdir
 end module HPCenvironment

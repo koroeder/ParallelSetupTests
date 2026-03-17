@@ -40,13 +40,14 @@ program ParallelSetupTest
    call get_ntasks(gput)
    call get_hostname()
    call get_slurmversion()
+   call get_subdir()
    
    allocate(pid(ntasks))
 
    write(*,*) "Number of tasks: ", ntasks
    write(*,*) "Hostname: ", hostname
    write(*,*) "Slurm version: ", slurmversion
-   
+   write(*,*) "Submission directory: ", submitdir
    !run jobs now
    jobcounter = 0 
    if (njobs.gt.ntasks) then

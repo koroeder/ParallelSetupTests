@@ -2,7 +2,7 @@ module create_jobs
 
    contains
       subroutine job_string(jobid,fname)
-         use HPCenvironment, only: hostname
+         use HPCenvironment, only: submitdir
          implicit none
          integer, intent(in) :: jobid
          character(len=*), intent(in) :: fname
@@ -27,7 +27,7 @@ module create_jobs
          
          write(*,*) "Job string ", jobstr, "waiting times: ", tstr1, tstr2
          
-         target = trim(adjustl(hostname))//':$SLURM_SUBMIT_DIR/'//trim(adjustl(jobstr))
+         target = trim(adjustl(submitdir))//trim(adjustl(jobstr))
          !(1) create new directory
          fullstr = "mkdir -p "//trim(adjustl(target))
          !(2) enter directory
