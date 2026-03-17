@@ -21,9 +21,6 @@ module create_jobs
          time1 = int(100.0*rand1)
          time2 = int(100.0*rand2)
 
-         write(*,*) "rand1: ", rand1, " time1: ", time1
-         write(*,*) "rand2: ", rand2, " time2: ", time2
-
          write(tstr1,'(i8)') time1
          write(tstr2,'(i8)') time2
          write(jobstr,'(i8)') jobid

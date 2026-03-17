@@ -3,12 +3,12 @@ program ParallelSetupTest
    use create_jobs
    implicit none
 
-   integer :: ncores ! number of cores
    integer :: njobs ! number of jobs to be run
    logical :: gput ! using GPUS?
    character(len=10) :: inpdummy
    integer :: nargs
    integer :: jobcounter, j
+   character(len=10) :: jobstr
    
    ! check number of arguments
    nargs = command_argument_count()
@@ -45,18 +45,21 @@ program ParallelSetupTest
    if (njobs.gt.ntasks) then
       do j=1,ntasks
          jobcounter = jobcounter + 1
-      	 call job_string(jobcounter,"submit.sh")
+         write(jobstr,'(i8)') jobcounter
+         call job_string(jobcounter,"submit"//trim(adjustl(jobstr))//".sh")
       end do
    else
       do j=1,njobs
          jobcounter = jobcounter + 1
-      	 call job_string(jobcounter,"submit.sh")
+         write(jobstr,'(i8)') jobcounter
+         call job_string(jobcounter,"submit"//trim(adjustl(jobstr))//".sh")
       end do
    end if
    
    do while (jobcounter.lt.njobs)
       jobcounter = jobcounter + 1
-      call job_string(jobcounter,"submit.sh")
+      write(jobstr,'(i8)') jobcounter
+      call job_string(jobcounter,"submit"//trim(adjustl(jobstr))//".sh")
    end do
  
 end program ParallelSetupTest
