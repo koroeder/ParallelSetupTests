@@ -22,7 +22,7 @@ module utils
          use iso_c_binding, only: c_char, c_int
          implicit none
          character(kind=c_char) :: cmd(*)
-         character(kind=c_int) :: exec_wrapper
+         integer(kind=c_int) :: exec_wrapper
       end function exec_wrapper
    end interface
 

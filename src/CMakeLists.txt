@@ -3,6 +3,8 @@ project(TestParallelSetup)
 
 # Enable Fortran
 enable_language(Fortran)
+#Enable CXX
+enable_language(CXX)
 
 # Set compiler flags
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -14,8 +16,10 @@ endif()
 # List of Fortran source files
 set(FORTRAN_SOURCES
        	main.f90
-	mod_hpc_environ.f90
-	create_job_string.f90
+		mod_hpc_environ.f90
+		create_job_string.f90
+		utils_job_submission.f90
+		exec_wrapper.c
 )
 
 # Add the executable
