@@ -18,6 +18,7 @@ module HPCenvironment
             read(str_ngpus,*) ntasks
          else
             call get_environment_variable("SLURM_NTASKS", str_ntasks)
+            write(*,*) str_ntasks
             read(str_ntasks,*) ntasks
          end if
       end subroutine get_ntasks
