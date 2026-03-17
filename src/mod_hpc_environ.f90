@@ -48,6 +48,6 @@ module HPCenvironment
 
       subroutine get_subdir()
          implicit none
-         call get_environment_variable("SLURM_SUBMIT_DIR/", submitdir)
+         call get_environment_variable("SLURM_SUBMIT_DIR", submitdir)
       end subroutine get_subdir
 end module HPCenvironment
