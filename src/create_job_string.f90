@@ -20,9 +20,14 @@ module create_jobs
          call random_number(rand2)
          time1 = int(100.0*rand1)
          time2 = int(100.0*rand2)
+
+         write(*,*) "rand1: ", rand1, " time1: ", time1
+         write(*,*) "rand2: ", rand2, " time2: ", time2
+
          write(tstr1,'(i8)') time1
          write(tstr2,'(i8)') time2
          write(jobstr,'(i8)') jobid
+         
          write(*,*) "Job string ", jobstr, "waiting times: ", tstr1, tstr2
          
          target = trim(adjustl(hostname))//':$SLURM_SUBMIT_DIR/'//trim(adjustl(jobstr))
