@@ -15,11 +15,11 @@ module HPCenvironment
          
          if (gput) then
             call get_environment_variable("SLURM_GPU",str_ngpus)
-            read(str_ngpus,*) ntasks
+            read(str_ngpus,'(i8)') ntasks
          else
             call get_environment_variable("SLURM_NTASKS", str_ntasks)
             write(*,*) str_ntasks
-            read(str_ntasks,*) ntasks
+            read(str_ntasks,'(i8)') ntasks
          end if
       end subroutine get_ntasks
       
