@@ -11,7 +11,7 @@ module create_jobs
          character(len=1000) :: fullstr
          real :: rand1, rand2
          integer :: time1, time2
-         character :: tstr1, tstr2
+         character(len=10) :: tstr1, tstr2
          integer :: sunit = 501
          
          !create some random numbers
