@@ -41,8 +41,8 @@ module create_jobs
          
          !create submission script
          open(sunit,file=trim(adjustl(fname)),status='unknown')
-         write(sunit,*) '#!/bin/bash'
-         write(sunit,*) trim(adjustl(fullstr))
+         write(sunit,'(a)') '#!/bin/bash'
+         write(sunit,'(a)') trim(adjustl(fullstr))
          close(sunit)
          
          !make script executable
