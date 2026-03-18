@@ -27,22 +27,22 @@ module create_jobs
          
          write(*,*) "Job string ", jobstr, "waiting times: ", tstr1, tstr2
          
-         target = trim(adjustl(submitdir))//trim(adjustl(jobstr))
+         target = trim(adjustl(submitdir))//"/"//trim(adjustl(jobstr))
          !(1) create new directory
          fullstr = "mkdir -p "//trim(adjustl(target))
          !(2) enter directory
          fullstr = trim(adjustl(fullstr))//" ; cd "//trim(adjustl(target))
          !(3) now wait 
-         fullstr = trim(adjustl(fullstr))//" ; sleep("//trim(adjustl(tstr1))//")"
+         fullstr = trim(adjustl(fullstr))//" ; sleep "//trim(adjustl(tstr1))
          !(4) create an output
          fullstr = trim(adjustl(fullstr))//" ; echo 'hello world' > here"
          !(5) now wait again
-         fullstr = trim(adjustl(fullstr))//" ; sleep("//trim(adjustl(tstr2))//")"
+         fullstr = trim(adjustl(fullstr))//" ; sleep "//trim(adjustl(tstr2))
          
          !create submission script
          open(sunit,file=trim(adjustl(fname)),status='unknown')
          write(sunit,*) '#!/bin/bash'
-         write(sunit,*) fullstr
+         write(sunit,*) trim(adjustl(fullstr))
          close(sunit)
          
          !make script executable
