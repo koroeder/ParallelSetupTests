@@ -37,7 +37,8 @@ module utils
          if (gput) then
             call exec_subr('srun -n1 -N1 --exclusive -l --gres=gpu:1 ' // TRIM(ADJUSTL(FNAME)))
          else
-            call exec_subr('srun -n1 -N1 --exclusive -l ' // TRIM(ADJUSTL(FNAME)))
+            !call exec_subr('srun -n1 -N1 --exclusive -l '//TRIM(ADJUSTL(FNAME)))
+            call exec_subr('srun --ntasks=1 --cpus-per-task=1 --exclusive --label'//TRIM(ADJUSTL(FNAME)))
          end if
       end subroutine submit_new_proc
 
