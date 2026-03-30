@@ -66,11 +66,16 @@ module utils
          use iso_c_binding, only: c_null_char
          implicit none
          character(len=*), intent(in) :: cmd
+         logical :: useexec = .false.
          integer :: stat
          
-         stat = exec_wrapper(trim(adjustl(cmd))//c_null_char)
+         if (useexec) then
+            stat = exec_wrapper(trim(adjustl(cmd))//c_null_char)
 
-         write(*,*) "execute> soemthing has gone wrong, iostat: ", stat
-         stop
+            write(*,*) "execute> soemthing has gone wrong, iostat: ", stat
+            stop
+         else
+            call execute_command_line(trim(adjustl(cmd)),wait=.false.,cmdstat=stat)
+         end if
       end subroutine exec_subr
 end module utils
