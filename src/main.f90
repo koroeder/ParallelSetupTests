@@ -67,10 +67,10 @@ program ParallelSetupTest
          write(jobstr,'(i8)') jobcounter
          fname = "submit"//trim(adjustl(jobstr))//".sh"
          call job_string(jobcounter,fname)
-         !call fork_subproc(pid(j))
-         !if (pid(j).eq.0) then
-         call submit_new_proc(fname,gput)
-         !end if
+         call fork_subproc(pid(j))
+         if (pid(j).eq.0) then
+            call submit_new_proc(fname,gput)
+         end if
       end do
    end if
 
@@ -101,10 +101,10 @@ program ParallelSetupTest
       write(jobstr,'(i8)') jobcounter
       fname = "submit"//trim(adjustl(jobstr))//".sh"
       call job_string(jobcounter,fname)
-      !call fork_subproc(pid(newjob))
-      !if (pid(newjob).eq.0) then
-      !   call submit_new_proc(fname,gput)
-      !end if
+      call fork_subproc(pid(newjob))
+      if (pid(newjob).eq.0) then
+         call submit_new_proc(fname,gput)
+      end if
    end do
  
    !need to wait for the remaining jobs

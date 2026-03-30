@@ -75,7 +75,7 @@ module utils
             write(*,*) "execute> soemthing has gone wrong, iostat: ", stat
             stop
          else
-            call execute_command_line(trim(adjustl(cmd)),wait=.false.,cmdstat=stat)
+            call execute_command_line(trim(adjustl(cmd)),wait=.true.,cmdstat=stat)
          end if
       end subroutine exec_subr
 end module utils
