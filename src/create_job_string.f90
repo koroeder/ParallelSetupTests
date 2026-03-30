@@ -46,7 +46,7 @@ module create_jobs
          close(sunit)
          
          !make script executable
-         call execute_command_line("chmod +x "//trim(adjustl(fname)))
+         call execute_command_line("chmod +x "//trim(adjustl(fname)),wait=.true.)
       end subroutine job_string
 
 

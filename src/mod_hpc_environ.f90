@@ -39,11 +39,11 @@ module HPCenvironment
          implicit none
          integer :: slurmunit = 501
          
-         call execute_command_line("sinfo --version | sed 's/-wlm//' |cut -c7-8 > slurmversion")
+         call execute_command_line("sinfo --version | sed 's/-wlm//' |cut -c7-8 > slurmversion",wait=.true.)
          open(unit=slurmunit, file="slurmversion", status="old")
          read(slurmunit,'(i8)') slurmversion
          close(slurmunit)
-         call execute_command_line("rm slurmversion")
+         call execute_command_line("rm slurmversion",wait=.true.)
       end subroutine get_slurmversion
 
       subroutine get_subdir()
