@@ -39,7 +39,7 @@ module utils
          else
             !call exec_subr('srun -n1 -N1 --exclusive -l '//TRIM(ADJUSTL(FNAME)))
             !call exec_subr('srun --n1 -N1 --cpus-per-task=1 --exclusive --label --wait=0 '//TRIM(ADJUSTL(FNAME)))
-            call exec_subr('srun --n1 -N1 --cpus-per-task=1 --overlap --label --wait=0 '//TRIM(ADJUSTL(FNAM
+            call exec_subr('srun --n1 -N1 --cpus-per-task=1 --overlap --label --wait=0 '//TRIM(ADJUSTL(FNAME)))
          end if
       end subroutine submit_new_proc
 
