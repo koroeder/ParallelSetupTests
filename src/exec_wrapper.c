@@ -56,7 +56,7 @@ int exec_wrapper(char* cmd)
     }
 
     // Initialise all to NULL.
-    memset(argv, NULL, (no + 1) * sizeof(char*));
+    memset(argv, 0, (no + 1) * sizeof(char*));
 
     // Split command into argv    
     // Pass through the cmd line.
