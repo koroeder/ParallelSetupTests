@@ -10,6 +10,7 @@ module HPCenvironment
    contains
 
       subroutine get_ntasks(gput)
+         use logger
          implicit none
          logical, intent(in) :: gput
          character(len=250) :: str_ngpus, str_ntasks
