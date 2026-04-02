@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
 
 /**
     This is a wrapper for a call to exec made from Fortran.
@@ -20,93 +21,96 @@ int exec_wrapper(char* cmd)
     // For loop counter.
     char* current;
     size_t i;
-
     // First pass through the cmd line. Here, we are just counting the number
     // of arguments. no becomes the number of arguments.
     size_t no = 0;
     int in_word = 0;
-    for (current = cmd; *current != '\0'; ++current)
-    {
+
+
+    // Check for very long command strings
+    if (strlen(cmd) > 65536) { // Arbitrary large limit
+       fprintf(stderr, "Command too long\n");
+       return -1;
+    }
+
+    // Count arguments
+    for (current = cmd; *current != '\0'; ++current) {
         // If we weren't in a word, but are now, set in_word and increase
         // argument number.
-        if (!in_word && !isspace(*current))
-        {
+        if (!in_word && !isspace((unsigned char)*current)) {
             in_word = 1;
             ++no;
         }
-
         // If we were in a word, but aren't now, reset in_word.
-        else if (in_word && isspace(*current))
+        else if (in_word && isspace((unsigned char)*current)) {
             in_word = 0;
-
-        // If we weren't in a word and still aren't, or if we were in a word and
-        // still are, we don't need to do anything.
+        }
     }
 
     // Now we know the number of arguments, we can allocate the array to hold
     // them. We add one extra, as the last element must be NULL.
     argv = (char**)malloc((no + 1) * sizeof(char*));
+    if (!argv) {
+        perror("argv: malloc failed");
+        return -1;
+    }
 
     // Initialise all to NULL.
-    for (i = 0; i <= no; ++i)
-        argv[i] = NULL;
-    
-    // Second pass through the cmd line.
+    memset(argv, NULL, (no + 1) * sizeof(char*));
+
+    // Split command into argv    
+    // Pass through the cmd line.
     // We need to split the command into the file name and different arguments.
     // We split the input string at each space.
     size_t arg_index = 0;
     char* current_start = NULL;
-    for (current = cmd; *current != '\0' && arg_index != no; ++current)
-    {
-        // If we weren't in a word, but are now, set the current start.
-        if (current_start == NULL && !isspace(*current))
+    for (current = cmd, i = 0; *current != '\0' && i != no; ++current) {
+        if (current_start == NULL && !isspace((unsigned char)*current)) {
             current_start = current;
 
         // If we were in a word, but aren't now, replace the space with a null
         // and set not being in a word.
-        else if (current_start != NULL && isspace(*current))
-        {
+        } else if (current_start != NULL && isspace((unsigned char)*current)) {
             *current = '\0';
-            if (arg_index == 0)
+            if (i == 0) {
                 filename = current_start;
-            else
-                argv[arg_index] = current_start;
-            ++arg_index;
+            } else {
+                argv[i] = current_start;
+            }
+            ++i;
             current_start = NULL;
         }
-
-        // If we weren't in a word and still aren't, or if we were in a word and
-        // still are, we don't need to do anything.
     }
+
     // We may have ended a word with '\0', so we might have a final word to add.
-    if (current_start != NULL && arg_index < no)
-    {
-        if (arg_index == 0)
+    if (current_start != NULL && i < no) {
+        if (i == 0) {
             filename = current_start;
-        else
-            argv[arg_index] = current_start;
-    } 
-    
+        } else {
+            argv[i] = current_start;
+        }
+    }
+
+    // Extract filename (basename)
     // Now we need to fiddle the file name. The filename pointer contains the
     // path as specified (which might just be the name itself). argv[0] is
     // supposed to contain only the name. So, we just track back from the end
     // of filename until we get to the start or a '/'.
     for (current_start = filename + strlen(filename) - 1;
-        current_start != filename && *current_start != '/';
-        --current_start) ;
-
-    if (*current_start == '/')
+         current_start != filename && *current_start != '/';
+         --current_start);
+    if (*current_start == '/') {
         // We found a /. Take the section following it.
         argv[0] = current_start + 1;
-    else
-        // We reached the beginning of the string. Take the whole string.
+    } else {
         argv[0] = filename;
+    }
 
     // Everything is ready. Call exec.
     execvp(filename, argv);
+    perror("execvp failed");
 
-    // If we've reached here, bad things have happened. Free the memory and
-    // return failure.
+    // Cleanup and return
     free(argv);
     return -1;
 }

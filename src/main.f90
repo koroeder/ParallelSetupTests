@@ -14,8 +14,10 @@ program ParallelSetupTest
    character(len=100) :: fname
    integer :: piddone, status, newjob
    logical :: killed
-   
-   ! check number of arguments
+   integer :: nfree  ! Number of free slots
+   integer, allocatable :: free_slots(:)
+
+   ! Check number of arguments
    nargs = command_argument_count()
    
    ! first argument is the number of jobs
@@ -36,19 +38,27 @@ program ParallelSetupTest
          end if
       end if
    end if
+
    !get environment variables
    call get_ntasks(gput)
    call get_hostname()
    call get_slurmversion()
    call get_subdir()
-   
-   allocate(pid(ntasks))
+
+   allocate(pid(ntasks), free_slots(ntasks))
 
    write(*,*) "Number of tasks: ", ntasks
    write(*,*) "Hostname: ", hostname
    write(*,*) "Slurm version: ", slurmversion
    write(*,*) "Submission directory: ", submitdir
-   !run jobs now
+
+   ! Initialize free slots (all slots are initially free)
+   nfree = ntasks
+   do j = 1, ntasks
+      free_slots(j) = j
+   end do
+
+   !run initial jobs
    jobcounter = 0 
    if (njobs.gt.ntasks) then
       do j=1,ntasks
@@ -56,10 +66,11 @@ program ParallelSetupTest
          write(jobstr,'(i8)') jobcounter
          fname = "submit"//trim(adjustl(jobstr))//".sh"
          call job_string(jobcounter,fname)
-         call fork_subproc(pid(j))
-         if (pid(j).eq.0) then
+         call fork_subproc(pid(free_slots(nfree)))
+         if (pid(free_slots(nfree)) == 0) then
             call submit_new_proc(fname,gput)
          end if
+         nfree = nfree - 1
       end do
    else
       do j=1,njobs
@@ -67,58 +78,71 @@ program ParallelSetupTest
          write(jobstr,'(i8)') jobcounter
          fname = "submit"//trim(adjustl(jobstr))//".sh"
          call job_string(jobcounter,fname)
-         call fork_subproc(pid(j))
-         if (pid(j).eq.0) then
+         call fork_subproc(pid(free_slots(nfree)))
+         if (pid(free_slots(nfree)) == 0) then
             call submit_new_proc(fname,gput)
          end if
+         nfree = nfree - 1
       end do
    end if
 
-   
-   do while (jobcounter.lt.njobs)
-      killed=.false.
-      call wait_subproc(piddone,status)
-      newjob = -1
-      if (piddone.gt.0) then
-         write(*,*) "PID ", piddone, " finished with exit status: ", status
-         do j=1,ntasks
-            if (piddone.eq.pid(j)) then
-               if (status.ne.0) killed=.true.
-               newjob = j
-               write(*,*) "PID ", piddone, " has finished on core ", j
+   ! reuse free slots as children finish
+   do while (jobcounter < njobs)
+      killed = .false.
+      call wait_subproc(piddone, status)
+      if (piddone > 0) then
+         write(*, *) "PID ", piddone, " finished with exit status: ", status
+         ! Find the slot corresponding to piddone
+         do j = 1, ntasks
+            if (pid(j) == piddone) then
+               if (status /= 0) killed = .true.
+               write(*, *) "PID ", piddone, " has finished on core ", j
+               ! Add this slot back to the free list
+               nfree = nfree + 1
+               free_slots(nfree) = j
+               exit
             end if
          end do
       else
-         write(*,*) " WARNING> wait returned a system error code", -PIDDONE
+         write(*, *) " WARNING> wait returned a system error code ", -piddone
          call execute_command_line("sleep 1.0")
-         call wait_subproc(piddone,status)
-         write(*,*) " On calling wait again pid=", piddone ,' status=', status
-         if (piddone.le.0) write(*,*) "WARNING> continuing for non-positive process id"
-         if (piddone.lt.0) stop
+         cycle
       end if
 
+      ! assign a new job to the freed slot
       jobcounter = jobcounter + 1
       write(jobstr,'(i8)') jobcounter
       fname = "submit"//trim(adjustl(jobstr))//".sh"
-      call job_string(jobcounter,fname)
-      call fork_subproc(pid(newjob))
-      if (pid(newjob).eq.0) then
-         call submit_new_proc(fname,gput)
-      end if
-   end do
- 
-   !need to wait for the remaining jobs
-   do j=1,ntasks
-      call wait_subproc(piddone,status)
-      if (piddone.gt.0) then
-         do k=1,ntasks
-            if (piddone.eq.pid(k)) then
-               write(*,*) "PID ", piddone, " has finished on core ", k
-            end if
-         end do
-      !note that we have not the same catching mechanism as above - this is normally needed, but we ignore it for this test setup
+      call job_string(jobcounter, fname)
+      if (nfree > 0) then
+         call fork_subproc(pid(free_slots(nfree)))
+         if (pid(free_slots(nfree)) == 0) then
+            call submit_new_proc(fname, gput)
+         end if
+         nfree = nfree - 1
+      else
+         write(*, *) "WARNING: No free slots available (should not happen)"
       end if
    end do
 
-   write(*,*) " >>> Finished all jobs <<< "
+   ! Wait for all remaining children to finish
+   do while (nfree < ntasks)
+      call wait_subproc(piddone, status)
+      if (piddone > 0) then
+         do j = 1, ntasks
+            if (pid(j) == piddone) then
+               write(*, *) "PID ", piddone, " has finished on core ", j
+               nfree = nfree + 1
+               free_slots(nfree) = j
+               exit
+            end if
+         end do
+      else
+         write(*, *) "WARNING: wait returned error code ", -piddone
+         call execute_command_line("sleep 1.0")
+      end if
+   end do
+
+   write(*, *) " >>> Finished all jobs <<< "
+   deallocate(pid, free_slots)
 end program ParallelSetupTest

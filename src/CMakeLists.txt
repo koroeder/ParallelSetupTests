@@ -17,6 +17,7 @@ endif()
 set(FORTRAN_SOURCES
        	main.f90
 		mod_hpc_environ.f90
+		mod_logger.f90
 		create_job_string.f90
 		utils_job_submission.f90
 		exec_wrapper.c

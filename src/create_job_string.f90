@@ -2,6 +2,7 @@ module create_jobs
 
    contains
       subroutine job_string(jobid,fname)
+         use logger
          use HPCenvironment, only: submitdir
          implicit none
          integer, intent(in) :: jobid
@@ -13,6 +14,7 @@ module create_jobs
          integer :: time1, time2
          character(len=10) :: tstr1, tstr2
          integer :: sunit = 501
+         integer :: stat
          
          !create some random numbers
          call random_seed()
@@ -40,13 +42,21 @@ module create_jobs
          fullstr = trim(adjustl(fullstr))//" ; sleep "//trim(adjustl(tstr2))
          
          !create submission script
-         open(sunit,file=trim(adjustl(fname)),status='unknown')
+         open(sunit,file=trim(adjustl(fname)),status='unknown', iostat=stat)
+         if (stat /= 0) then
+            call log_message(3, "Failed to create submission script "//trim(fname))
+            stop 1
+         end if
          write(sunit,'(a)') '#!/bin/bash'
          write(sunit,'(a)') trim(adjustl(fullstr))
          close(sunit)
          
          !make script executable
-         call execute_command_line("chmod +x "//trim(adjustl(fname)),wait=.true.)
+         call execute_command_line("chmod +x "//trim(adjustl(fname)),wait=.true.,cmdstat=stat)
+         if (stat /= 0) then
+            call log_message(3, "Failed to make script executable")
+            stop 1
+         end if
       end subroutine job_string
 
 
