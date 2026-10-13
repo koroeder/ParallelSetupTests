@@ -21,6 +21,7 @@ set(FORTRAN_SOURCES
 		create_job_string.f90
 		utils_job_submission.f90
 		exec_wrapper.c
+		cpu_topology.c
 )
 
 # Add the executable
