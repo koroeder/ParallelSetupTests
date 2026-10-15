@@ -61,6 +61,7 @@ program ParallelSetupTest
    call get_slurmversion()
    call get_subdir()
    call check_shared_fs()
+   if (gput .and. jobs_per_gpu > 1) call write_pin_script()
    if (use_mps) call start_mps()
 
    allocate(pid(ntasks), free_slots(ntasks))

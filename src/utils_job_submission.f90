@@ -41,7 +41,7 @@ module utils
 
       subroutine submit_new_proc(fname,gput,slot)
          use HPCenvironment, only: node_cpus_per_slot, node_mem_per_cpu, node_name, &
-            slot_node, nnodes, slurmversion, jobs_per_gpu
+            slot_node, nnodes, slurmversion, jobs_per_gpu, node_cpus_total
          implicit none
          character(len=100), intent(in) :: fname
          logical, intent(in) :: gput
@@ -67,13 +67,22 @@ module utils
                ! one job per GPU: Slurm assigns the GPU to the step
                stepflags = ' --gres=gpu:1'//stepflags
             else
-               ! shared GPUs: the step must see the job's GPUs, the job script
-               ! selects one; flags can be overridden for testing (R2)
+               ! shared GPUs: a step without --gres is allocated all job GPUs
+               ! exclusively, so such steps run one after another (AUDIT §17).
+               ! --overlap lets them run concurrently, but Slurm would put them
+               ! all on the same core: request all job CPUs of the node and let
+               ! the job script pin itself to its slot's core (pin_core.sh).
+               ! Flags can be overridden for testing.
+               write(cstr,'(i8)') node_cpus_total(inode)
+               stepflags = ' --overlap'
                call get_environment_variable("PARALLELTEST_GPU_STEP_FLAGS", value=envflags, status=stat)
                if (stat == 0 .and. len_trim(envflags) > 0) stepflags = ' '//trim(adjustl(envflags))
             end if
          end if
-         if (node_mem_per_cpu(inode) > 0) then
+         if (gput .and. jobs_per_gpu > 1) then
+            ! overlapping steps share the job's memory; a per-CPU request for all CPUs would ask for all of it
+            memflag = ''
+         else if (node_mem_per_cpu(inode) > 0) then
             write(mstr,'(i12)') node_mem_per_cpu(inode)
             memflag = ' --mem-per-cpu='//trim(adjustl(mstr))
          else
@@ -136,12 +145,14 @@ module utils
          write(sunit,'(a)') '#!/bin/bash'
          write(sunit,'(a)') '# MPS control daemon for one node; runs until the stop file appears'
          write(sunit,'(a)') 'I=$1; CTRL=$2'
-         write(sunit,'(a)') 'D=${TMPDIR:-/tmp}/mps_${SLURM_JOB_ID:-local}'
+         write(sunit,'(a)') '# /dev/shm, not /tmp: /tmp is private per step on this cluster (private-tmpdir)'
+         write(sunit,'(a)') 'D=${PARALLELTEST_MPS_BASE:-/dev/shm}/mps_${SLURM_JOB_ID:-local}'
          write(sunit,'(a)') 'export CUDA_MPS_PIPE_DIRECTORY=$D/pipe CUDA_MPS_LOG_DIRECTORY=$D/log'
          write(sunit,'(a)') '# on any exit: keep the control log in the shared control dir, remove the node-local dir'
          write(sunit,'(a)') 'trap "cp $D/log/control.log $CTRL/control_$I.log 2>/dev/null; rm -rf $D" EXIT'
          write(sunit,'(a)') 'mkdir -p $D/pipe $D/log || exit 1'
-         write(sunit,'(a)') 'echo "MPS node $I host=$(hostname) GPUs=$CUDA_VISIBLE_DEVICES"'
+         write(sunit,'(a)') 'echo "MPS node $I host=$(hostname) step=$SLURM_STEP_ID '// &
+            'mntns=$(readlink /proc/self/ns/mnt) GPUs=$CUDA_VISIBLE_DEVICES"'
          write(sunit,'(a)') '[ -n "$CUDA_VISIBLE_DEVICES" ] || { echo "MPS node $I ERROR: no GPU visible"; exit 2; }'
          write(sunit,'(a)') 'nvidia-cuda-mps-control -d || { echo "MPS node $I ERROR: daemon start failed"; exit 3; }'
          write(sunit,'(a)') 'ok=0; for n in $(seq 1 20); do'
@@ -199,6 +210,42 @@ module utils
          end if
          call log_message(1, "MPS daemons running on all nodes")
       end subroutine start_mps
+
+      !> Writes pin_core.sh: prints the CPU list (hyperthread siblings) of the
+      !> K-th physical core (0-based) in the caller's affinity mask. Used by
+      !> job scripts of shared-GPU jobs, whose steps see all job CPUs of a node.
+      subroutine write_pin_script()
+         use logger
+         implicit none
+         character(len=*), parameter :: pname = "pin_core.sh"
+         integer :: stat
+         integer :: sunit = 506
+
+         open(sunit, file=pname, status='replace', iostat=stat)
+         if (stat /= 0) then
+            call log_message(3, "Failed to create "//pname)
+            stop 1
+         end if
+         write(sunit,'(a)') '#!/bin/bash'
+         write(sunit,'(a)') '# prints the CPUs of the K-th physical core (0-based) in this process''s affinity mask'
+         write(sunit,'(a)') 'K=$1'
+         write(sunit,'(a)') 'list=$(grep Cpus_allowed_list /proc/self/status | cut -f2)'
+         write(sunit,'(a)') 'declare -A members; order=()'
+         write(sunit,'(a)') 'IFS=, read -ra parts <<< "$list"'
+         write(sunit,'(a)') 'for p in "${parts[@]}"; do'
+         write(sunit,'(a)') '  if [[ $p == *-* ]]; then cpus=$(seq ${p%-*} ${p#*-}); else cpus=$p; fi'
+         write(sunit,'(a)') '  for c in $cpus; do'
+         write(sunit,'(a)') '    s=$(cat /sys/devices/system/cpu/cpu$c/topology/thread_siblings_list 2>/dev/null || echo $c)'
+         write(sunit,'(a)') '    f=${s%%[,-]*}'
+         write(sunit,'(a)') '    [ -z "${members[$f]}" ] && order+=($f)'
+         write(sunit,'(a)') '    members[$f]="${members[$f]:+${members[$f]},}$c"'
+         write(sunit,'(a)') '  done'
+         write(sunit,'(a)') 'done'
+         write(sunit,'(a)') '[ "$K" -lt "${#order[@]}" ] || { echo "core $K not in mask $list" >&2; exit 1; }'
+         write(sunit,'(a)') 'echo "${members[${order[$K]}]}"'
+         close(sunit)
+         call execute_command_line("chmod +x "//pname, wait=.true., cmdstat=stat)
+      end subroutine write_pin_script
 
       !> Signals the MPS daemons to quit and waits for their srun steps.
       subroutine stop_mps()

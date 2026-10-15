@@ -3,12 +3,12 @@ module create_jobs
    contains
       subroutine job_string(jobid,fname,slot,gput)
          use logger
-         use HPCenvironment, only: submitdir, jobs_per_gpu, use_mps, slot_gpu
+         use HPCenvironment, only: submitdir, jobs_per_gpu, use_mps, slot_gpu, slot_local
          implicit none
          integer, intent(in) :: jobid, slot
          logical, intent(in) :: gput
          character(len=*), intent(in) :: fname
-         character(len=10) :: jobstr, gstr
+         character(len=10) :: jobstr, gstr, lstr
          character(len=150) :: target
          character(len=4000) :: fullstr
          character(len=2000) :: jobcmd
@@ -34,8 +34,18 @@ module create_jobs
          
          target = trim(adjustl(submitdir))//"/"//trim(adjustl(jobstr))
          !(0) diagnostics: node, step and CPUs this job may run on
+         ! (mount namespace id: differs between steps if a step has a private /tmp)
          fullstr = 'echo "job '//trim(adjustl(jobstr))//' host=$(hostname) step=$SLURM_STEP_ID '// &
-            '$(grep Cpus_allowed_list /proc/self/status)"'
+            'mntns=$(readlink /proc/self/ns/mnt) $(grep Cpus_allowed_list /proc/self/status)"'
+         !(0a) shared GPUs: the step sees all job CPUs of the node (--overlap), so pin
+         ! this job to the physical core of its slot first (the diagnostics line then
+         ! shows the pinned CPUs)
+         if (gput .and. jobs_per_gpu > 1) then
+            write(lstr,'(i8)') slot_local(slot)
+            fullstr = 'pin=$(./pin_core.sh '//trim(adjustl(lstr))//') && taskset -pc $pin $$ > /dev/null'// &
+               ' || { echo "job '//trim(adjustl(jobstr))//' ERROR: cannot pin to core '// &
+               trim(adjustl(lstr))//'"; exit 6; } ; '//trim(fullstr)
+         end if
          !(0b) shared GPUs: check that the step sees the job's GPUs, select the
          ! GPU of this slot (job-relative index) and, with MPS, check the daemon
          if (gput .and. jobs_per_gpu > 1) then
@@ -47,9 +57,13 @@ module create_jobs
                trim(adjustl(gstr))//'"'
             fullstr = trim(adjustl(fullstr))//' ; export CUDA_VISIBLE_DEVICES='//trim(adjustl(gstr))
             if (use_mps) then
-               fullstr = trim(adjustl(fullstr))//' ; export CUDA_MPS_PIPE_DIRECTORY=${TMPDIR:-/tmp}/mps_${SLURM_JOB_ID:-local}/pipe'
-               fullstr = trim(adjustl(fullstr))//' ; echo get_server_list | nvidia-cuda-mps-control > /dev/null 2>&1'// &
-                  ' || { echo "'//tag//' ERROR: MPS daemon not reachable"; exit 4; }'
+               ! /dev/shm, not /tmp: /tmp is private per step on this cluster (AUDIT §17)
+               fullstr = trim(adjustl(fullstr))//' ; export CUDA_MPS_PIPE_DIRECTORY='// &
+                  '${PARALLELTEST_MPS_BASE:-/dev/shm}/mps_${SLURM_JOB_ID:-local}/pipe'
+               ! on failure, report the client's message and what the step sees in the pipe directory
+               fullstr = trim(adjustl(fullstr))//' ; mpsout=$(echo get_server_list | nvidia-cuda-mps-control 2>&1)'// &
+                  ' || { echo "'//tag//' ERROR: MPS daemon not reachable: $mpsout"'// &
+                  ' ; ls -la $CUDA_MPS_PIPE_DIRECTORY 2>&1 ; exit 4; }'
             end if
          end if
          !(1) create new directory

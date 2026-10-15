@@ -14,6 +14,9 @@ module HPCenvironment
    integer, allocatable :: node_nslots(:)
    ! node index of each slot, and GPU index (job-relative, 0-based; -1 in CPU mode)
    integer, allocatable :: slot_node(:), slot_gpu(:)
+   ! per-node slot index of each slot (0-based; selects the physical core when the
+   ! job pins itself), and all job CPUs per node (requested by shared-GPU steps)
+   integer, allocatable :: slot_local(:), node_cpus_total(:)
    ! GPU mode: jobs sharing one GPU, MPS used for sharing, GPUs per node
    integer :: jobs_per_gpu = 1
    logical :: use_mps = .false.
@@ -103,14 +106,16 @@ module HPCenvironment
 
          if (allocated(slot_node)) deallocate(slot_node)
          if (allocated(slot_gpu)) deallocate(slot_gpu)
+         if (allocated(slot_local)) deallocate(slot_local)
          ntasks = sum(node_nslots)
-         allocate(slot_node(ntasks), slot_gpu(ntasks))
+         allocate(slot_node(ntasks), slot_gpu(ntasks), slot_local(ntasks))
          k = 0
          do c = 1, maxval(node_nslots)
             do j = 1, nnodes
                if (node_nslots(j) >= c) then
                   k = k + 1
                   slot_node(k) = j
+                  slot_local(k) = c - 1
                   if (ngpu_node > 0) then
                      slot_gpu(k) = mod(c-1, ngpu_node)
                   else
@@ -190,10 +195,16 @@ module HPCenvironment
 
          nnodes = 1
          allocate(node_name(1), node_cpus_per_slot(1), node_mem_per_cpu(1), node_nslots(1))
+         allocate(node_cpus_total(1))
          node_name(1) = ""
          node_cpus_per_slot(1) = cpus_per_slot
          node_mem_per_cpu(1) = mem_per_cpu
          node_nslots(1) = ntasks
+         if (cpus_on_node > 0) then
+            node_cpus_total(1) = cpus_on_node
+         else
+            node_cpus_total(1) = nthreads
+         end if
          call build_slot_table()
       end subroutine get_ncores
 
@@ -309,8 +320,9 @@ module HPCenvironment
          end if
 
          ! (6) slot table, round-robin over nodes so that jobs spread evenly
-         allocate(node_nslots(nnodes))
+         allocate(node_nslots(nnodes), node_cpus_total(nnodes))
          node_nslots(:) = node_cores(:)
+         node_cpus_total(:) = node_cpus(:)
          call build_slot_table()
 
          write(msg,'(a,i6,a,i6)') "Nodes=", nnodes, " Slots=", ntasks

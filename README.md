@@ -46,14 +46,19 @@ All srun client processes run on the first node, one per running job.
 `SLURM_GPUS_ON_NODE` (fallback: entries in `CUDA_VISIBLE_DEVICES`), the same on all nodes.
 
 - P = 1: each job step requests `--gres=gpu:1` and Slurm assigns the GPU.
-- P > 1: job steps request no GPU and see the job's GPUs. The job script checks this, then sets
+- P > 1: job steps are launched with `srun --overlap -c<all job CPUs of the node>` and no `--gres`.
+  A step without `--gres` gets all job GPUs exclusively, so without `--overlap` such steps run one at a time.
+  With `--overlap`, Slurm would put every step on the same core, so each job script first pins itself to the
+  physical core of its slot (`pin_core.sh` + `taskset`). It then checks that the step sees the job's GPUs and sets
   `CUDA_VISIBLE_DEVICES` to the GPU of its slot (round-robin). By default the GPUs are shared via **MPS**:
   one control daemon per node runs in its own `srun --overlap` step (`mps_daemon.sh`) with pipe/log
-  directories in `${TMPDIR:-/tmp}/mps_$SLURM_JOB_ID`. Readiness and shutdown are signalled through
-  `<submitdir>/.mps_$SLURM_JOB_ID/`, where the control logs are kept. `nomps` shares the GPUs by time-slicing instead.
+  directories in `/dev/shm/mps_$SLURM_JOB_ID` (`PARALLELTEST_MPS_BASE` overrides `/dev/shm`). `/tmp` cannot be used:
+  on this cluster every step has a private `/tmp` (SPANK `private-tmpdir`). Readiness and shutdown are signalled
+  through `<submitdir>/.mps_$SLURM_JOB_ID/`, where the control logs are kept. `nomps` shares the GPUs by time-slicing instead.
 - The run stops with an error if a daemon fails to start or ends early. A job exits with status 3 if its step sees no GPU,
-  and with status 4 if it cannot reach the MPS daemon.
-- `PARALLELTEST_GPU_STEP_FLAGS` replaces the default step flags (`--exact --cpu-bind=cores`) for P > 1, for testing.
+  4 if it cannot reach the MPS daemon (it prints the client's message and the pipe directory listing), and 6 if it cannot
+  pin itself to its core.
+- `PARALLELTEST_GPU_STEP_FLAGS` replaces the default step flags (`--overlap`) for P > 1, for testing.
 - `PARALLELTEST_JOB_CMD` appends a command (e.g. a `pmemd.cuda` call) to every job script; the job exits with status 5 if it fails.
 
 Validation on the cluster: `tests/validate_gpu_mps.sbatch`.
